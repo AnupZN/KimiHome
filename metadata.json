@@ -1,0 +1,6 @@
+{
+  "name": "KimiHome",
+  "description": "A responsive, modern browser startpage featuring customizable widgets, quick-access bookmarks, a dark mode toggle, and local personalization.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

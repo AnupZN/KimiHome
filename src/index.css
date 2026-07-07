@@ -1,0 +1,224 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+html, body {
+  overflow-x: hidden;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+@variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --color-elegant-bg: #0A0A0B;
+  --color-elegant-card: #161618;
+  --color-elegant-border: #2D2D30;
+  --color-elegant-border-hover: #3E3E42;
+  --color-elegant-card-darker: #0E0E10;
+}
+
+/* Custom minimal scrollbar styling */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.3);
+  border-radius: 9999px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.5);
+}
+
+@variant cosmic (&:where(.cosmic, .cosmic *));
+
+/* Starry cosmic background elements */
+.cosmic-stars {
+  position: fixed;
+  inset: 0;
+  background-image: 
+    radial-gradient(1.5px 1.5px at 20px 30px, #ffffff, rgba(0,0,0,0)),
+    radial-gradient(1px 1px at 50px 80px, #d8b4fe, rgba(0,0,0,0)),
+    radial-gradient(2px 2px at 120px 180px, rgba(168, 85, 247, 0.8), rgba(0,0,0,0)),
+    radial-gradient(1.5px 1.5px at 190px 50px, #ffffff, rgba(0,0,0,0)),
+    radial-gradient(1px 1px at 240px 120px, #c084fc, rgba(0,0,0,0)),
+    radial-gradient(2px 2px at 280px 240px, rgba(129, 140, 248, 0.7), rgba(0,0,0,0)),
+    radial-gradient(1px 1px at 320px 60px, #ffffff, rgba(0,0,0,0)),
+    radial-gradient(1.5px 1.5px at 380px 150px, #e9d5ff, rgba(0,0,0,0));
+  background-size: 400px 400px;
+  opacity: 0.25;
+  animation: cosmicTwinkle 8s ease-in-out infinite alternate;
+  pointer-events: none;
+  z-index: 0;
+  will-change: opacity;
+}
+
+@keyframes cosmicTwinkle {
+  0% { opacity: 0.15; }
+  100% { opacity: 0.4; }
+}
+
+/* Cosmic theme overrides */
+.cosmic .dark\:bg-elegant-card {
+  background-color: rgba(20, 16, 32, 0.95) !important;
+  border-color: rgba(168, 85, 247, 0.24) !important;
+  box-shadow: 
+    0 10px 30px -10px rgba(0, 0, 0, 0.5), 
+    0 0 25px rgba(168, 85, 247, 0.05),
+    inset 0 1px 1px rgba(255, 255, 255, 0.05) !important;
+}
+
+.cosmic .dark\:bg-elegant-card:hover {
+  border-color: rgba(168, 85, 247, 0.45) !important;
+  box-shadow: 
+    0 15px 35px -5px rgba(0, 0, 0, 0.6), 
+    0 0 35px rgba(168, 85, 247, 0.12),
+    inset 0 1px 1px rgba(255, 255, 255, 0.08) !important;
+}
+
+.cosmic h3.text-neutral-800, 
+.cosmic h3.dark\:text-neutral-200 {
+  color: #e9d5ff !important;
+}
+
+.cosmic h3 .text-neutral-500 {
+  color: #c084fc !important;
+  filter: drop-shadow(0 0 4px rgba(168, 85, 247, 0.3));
+}
+
+.cosmic #clock-time-display {
+  background: linear-gradient(135deg, #ffffff 0%, #d8b4fe 40%, #c084fc 70%, #818cf8 100%);
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  background-clip: text !important;
+  text-fill-color: transparent !important;
+  filter: drop-shadow(0 0 15px rgba(168, 85, 247, 0.4));
+}
+
+.cosmic #username-display-span {
+  border-bottom-color: rgba(168, 85, 247, 0.6) !important;
+  color: #d8b4fe !important;
+}
+
+.cosmic #username-display-span:hover {
+  color: #f3e8ff !important;
+  border-bottom-color: rgba(168, 85, 247, 0.9) !important;
+}
+
+.cosmic #search-bar-container {
+  background-color: rgba(22, 16, 36, 0.75) !important;
+  border-color: rgba(168, 85, 247, 0.25) !important;
+  box-shadow: 
+    0 10px 30px -10px rgba(0, 0, 0, 0.5), 
+    0 0 25px rgba(168, 85, 247, 0.04),
+    inset 0 1px 1px rgba(255, 255, 255, 0.05) !important;
+}
+
+.cosmic #search-bar-container:focus-within {
+  border-color: rgba(168, 85, 247, 0.6) !important;
+  box-shadow: 
+    0 15px 35px -5px rgba(0, 0, 0, 0.6), 
+    0 0 35px rgba(168, 85, 247, 0.15),
+    inset 0 1px 1px rgba(255, 255, 255, 0.08) !important;
+}
+
+.cosmic #search-bar-input {
+  color: #f3e8ff !important;
+}
+
+.cosmic input[type="text"], 
+.cosmic select, 
+.cosmic textarea {
+  background-color: rgba(12, 9, 20, 0.6) !important;
+  border-color: rgba(168, 85, 247, 0.2) !important;
+  color: #f3e8ff !important;
+}
+
+.cosmic input[type="text"]:focus, 
+.cosmic select:focus, 
+.cosmic textarea:focus {
+  border-color: rgba(168, 85, 247, 0.55) !important;
+  box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.15) !important;
+}
+
+.cosmic #add-bookmark-btn, 
+.cosmic #manage-bookmarks-btn,
+.cosmic #add-todo-btn,
+.cosmic #add-note-btn,
+.cosmic #settings-trigger-btn {
+  color: #d8b4fe !important;
+  background-color: rgba(168, 85, 247, 0.08) !important;
+  border: 1px solid rgba(168, 85, 247, 0.2) !important;
+}
+
+.cosmic #add-bookmark-btn:hover, 
+.cosmic #manage-bookmarks-btn:hover,
+.cosmic #add-todo-btn:hover,
+.cosmic #add-note-btn:hover,
+.cosmic #settings-trigger-btn:hover {
+  color: #ffffff !important;
+  background-color: rgba(168, 85, 247, 0.2) !important;
+  border-color: rgba(168, 85, 247, 0.45) !important;
+  box-shadow: 0 0 15px rgba(168, 85, 247, 0.15) !important;
+}
+
+.cosmic #focus-tabs, 
+.cosmic #todo-tabs,
+.cosmic #notes-list-container {
+  background-color: rgba(12, 9, 20, 0.6) !important;
+  border: 1px solid rgba(168, 85, 247, 0.1) !important;
+}
+
+.cosmic #focus-tabs button, 
+.cosmic #todo-tabs button {
+  color: rgba(243, 232, 255, 0.5) !important;
+}
+
+.cosmic #focus-tabs button:hover, 
+.cosmic #todo-tabs button:hover {
+  color: #ffffff !important;
+}
+
+.cosmic #focus-tabs button[class*="bg-white"],
+.cosmic #focus-tabs button[class*="dark:bg-elegant-border"],
+.cosmic #todo-tabs button[class*="bg-white"],
+.cosmic #todo-tabs button[class*="dark:bg-elegant-border"] {
+  background-color: rgba(168, 85, 247, 0.22) !important;
+  color: #ffffff !important;
+  border-color: rgba(168, 85, 247, 0.35) !important;
+  box-shadow: 0 0 10px rgba(168, 85, 247, 0.1) !important;
+}
+
+.cosmic .scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(168, 85, 247, 0.3) !important;
+}
+
+.cosmic .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: rgba(168, 85, 247, 0.5) !important;
+}
+
+.cosmic #settings-modal {
+  background-color: rgba(18, 14, 28, 0.95) !important;
+  border-color: rgba(168, 85, 247, 0.3) !important;
+  box-shadow: 0 10px 50px rgba(0, 0, 0, 0.6), 0 0 30px rgba(168, 85, 247, 0.15) !important;
+}
+
+.cosmic #settings-username-input {
+  background-color: rgba(10, 8, 16, 0.6) !important;
+  border-color: rgba(168, 85, 247, 0.2) !important;
+  color: #f3e8ff !important;
+}
+
+.cosmic #settings-username-input:focus {
+  border-color: rgba(168, 85, 247, 0.5) !important;
+}

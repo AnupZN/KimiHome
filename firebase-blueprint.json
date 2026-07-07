@@ -1,0 +1,37 @@
+{
+  "collections": {
+    "sync_profiles": {
+      "description": "Stores user startpage dashboard sync profiles keyed by a secure sync code",
+      "fields": {
+        "version": {
+          "type": "string",
+          "description": "Schema version"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO string of the last updated timestamp"
+        },
+        "userSettings": {
+          "type": "map",
+          "description": "User settings object"
+        },
+        "bookmarksList": {
+          "type": "array",
+          "description": "Array of bookmark items"
+        },
+        "todosList": {
+          "type": "array",
+          "description": "Array of todo items"
+        },
+        "notesList": {
+          "type": "array",
+          "description": "Array of quick notes"
+        },
+        "bookmarksCategoryOrder": {
+          "type": "array",
+          "description": "Array of strings defining custom category order"
+        }
+      }
+    }
+  }
+}

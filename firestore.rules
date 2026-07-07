@@ -1,0 +1,36 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Default-deny catch-all safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    match /sync_profiles/{profileId} {
+      // Validate the document ID (sync code) format to prevent resource poisoning
+      allow read: if isValidId(profileId);
+      
+      allow create, update: if isValidId(profileId) 
+        && isValidSyncProfile(request.resource.data);
+        
+      allow delete: if false; // Deletion is not exposed in the app
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() == 12 && id.matches('^SP-[A-Z0-9]{4}-[A-Z0-9]{4}$');
+    }
+
+    function isValidSyncProfile(data) {
+      return data.keys().hasAll(['version', 'updatedAt', 'userSettings', 'bookmarksList', 'todosList', 'notesList', 'bookmarksCategoryOrder'])
+        && data.keys().size() == 7
+        && data.version is string && data.version.size() <= 10
+        && data.updatedAt is string && data.updatedAt.size() <= 50
+        && data.userSettings is map
+        && data.bookmarksList is list && data.bookmarksList.size() <= 1000
+        && data.todosList is list && data.todosList.size() <= 1000
+        && data.notesList is list && data.notesList.size() <= 1000
+        && (data.bookmarksCategoryOrder == null || (data.bookmarksCategoryOrder is list && data.bookmarksCategoryOrder.size() <= 100));
+    }
+  }
+}
