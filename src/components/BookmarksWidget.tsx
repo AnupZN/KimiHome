@@ -467,7 +467,7 @@ export default function BookmarksWidget({
                       <a
                         key={b.id}
                         href={b.url}
-                        target="_blank"
+                        target="_self"
                         rel="noopener noreferrer"
                         draggable={true}
                         onDragStart={(e) => handleDragStart(e, b.id)}
@@ -532,7 +532,7 @@ export default function BookmarksWidget({
                       <a
                         key={b.id}
                         href={b.url}
-                        target="_blank"
+                        target="_self"
                         rel="noopener noreferrer"
                         draggable={true}
                         onDragStart={(e) => handleDragStart(e, b.id)}
@@ -604,7 +604,7 @@ export default function BookmarksWidget({
                     <a
                       key={b.id}
                       href={b.url}
-                      target="_blank"
+                      target="_self"
                       rel="noopener noreferrer"
                       draggable={true}
                       onDragStart={(e) => handleDragStart(e, b.id)}

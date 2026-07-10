@@ -46,10 +46,10 @@ export default function SearchBar({ currentEngine, onEngineChange }: SearchBarPr
       if (!/^https?:\/\//i.test(url)) {
         url = 'https://' + url;
       }
-      window.open(url, '_blank', 'noopener,noreferrer');
+      window.location.href = url;
     } else {
       const searchUrl = ENGINES[currentEngine].url + encodeURIComponent(query);
-      window.open(searchUrl, '_blank', 'noopener,noreferrer');
+      window.location.href = searchUrl;
     }
   };
 
