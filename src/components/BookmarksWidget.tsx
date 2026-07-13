@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, memo } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   Globe, Github, Youtube, Mail, BookOpen, Code, Music, Tv, 
   ShoppingBag, Calendar, MessageCircle, Plus, Trash2, Edit2, X, ExternalLink,
-  Bookmark as BookmarkIcon, GripVertical
+  Bookmark as BookmarkIcon, GripVertical, Search
 } from 'lucide-react';
 import { Bookmark } from '../types';
 
@@ -13,6 +13,7 @@ interface BookmarksWidgetProps {
   onDeleteBookmark: (id: string) => void;
   onUpdateBookmark: (bookmark: Bookmark) => void;
   onReorderBookmarks?: (bookmarks: Bookmark[]) => void;
+  linkTarget?: 'self' | 'blank';
 }
 
 const ICON_MAP = {
@@ -124,15 +125,17 @@ function BookmarkIconItem({ bookmark, size = 'sm', isLarge = false }: { bookmark
   );
 }
 
-export default function BookmarksWidget({ 
+const BookmarksWidget = memo(function BookmarksWidget({ 
   bookmarks, 
   onAddBookmark, 
   onDeleteBookmark,
   onUpdateBookmark,
-  onReorderBookmarks
+  onReorderBookmarks,
+  linkTarget = 'blank'
 }: BookmarksWidgetProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isManageMode, setIsManageMode] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [url, setUrl] = useState('');
@@ -316,12 +319,24 @@ export default function BookmarksWidget({
     return <Comp className="w-5 h-5" />;
   };
 
+  const filteredBookmarks = useMemo(() => {
+    if (!searchQuery.trim()) return bookmarks;
+    const q = searchQuery.toLowerCase().trim();
+    return bookmarks.filter(b => 
+      b.title.toLowerCase().includes(q) || 
+      b.url.toLowerCase().includes(q) ||
+      b.category.toLowerCase().includes(q)
+    );
+  }, [bookmarks, searchQuery]);
+
   // Group bookmarks by category
-  const groupedBookmarks = bookmarks.reduce((acc, b) => {
-    if (!acc[b.category]) acc[b.category] = [];
-    acc[b.category].push(b);
-    return acc;
-  }, {} as Record<string, Bookmark[]>);
+  const groupedBookmarks = useMemo(() => {
+    return filteredBookmarks.reduce((acc, b) => {
+      if (!acc[b.category]) acc[b.category] = [];
+      acc[b.category].push(b);
+      return acc;
+    }, {} as Record<string, Bookmark[]>);
+  }, [filteredBookmarks]);
 
   const getGridLayout = () => {
     if (isCompact) {
@@ -381,6 +396,28 @@ export default function BookmarksWidget({
         </div>
       </div>
 
+      {/* Bookmarks Search Bar */}
+      {bookmarks.length > 0 && (
+        <div className="mb-4 relative flex items-center" id="bookmarks-search-container">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search bookmarks by title, URL or category..."
+            className="w-full pl-9 pr-8 py-2.5 text-xs rounded-xl border border-neutral-200 dark:border-elegant-border bg-neutral-50/50 dark:bg-elegant-card-darker text-neutral-800 dark:text-neutral-100 placeholder-neutral-400 dark:placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 dark:focus:ring-indigo-500/20 transition-all shadow-sm"
+          />
+          <Search className="w-4 h-4 text-neutral-400 dark:text-neutral-500 absolute left-3 pointer-events-none" />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2.5 p-1 rounded-md text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-elegant-border transition-colors cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+      )}
+
       {isManageMode && (
         <div className="mb-6 p-3 px-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-900/30 rounded-2xl text-xs text-amber-700 dark:text-amber-300 flex items-center justify-between animate-in fade-in slide-in-from-top-2 duration-200">
           <span className="flex items-center gap-2">
@@ -404,6 +441,10 @@ export default function BookmarksWidget({
       {bookmarks.length === 0 ? (
         <div className="text-center py-8 text-neutral-400 dark:text-neutral-500 text-sm">
           No bookmarks saved. Click Add Link to populate.
+        </div>
+      ) : filteredBookmarks.length === 0 ? (
+        <div className="text-center py-8 text-neutral-400 dark:text-neutral-500 text-sm">
+          No bookmarks match your search.
         </div>
       ) : (
         <div className="space-y-6">
@@ -467,7 +508,7 @@ export default function BookmarksWidget({
                       <a
                         key={b.id}
                         href={b.url}
-                        target="_self"
+                        target={linkTarget === 'self' ? '_self' : '_blank'}
                         rel="noopener noreferrer"
                         draggable={true}
                         onDragStart={(e) => handleDragStart(e, b.id)}
@@ -532,7 +573,7 @@ export default function BookmarksWidget({
                       <a
                         key={b.id}
                         href={b.url}
-                        target="_self"
+                        target={linkTarget === 'self' ? '_self' : '_blank'}
                         rel="noopener noreferrer"
                         draggable={true}
                         onDragStart={(e) => handleDragStart(e, b.id)}
@@ -604,7 +645,7 @@ export default function BookmarksWidget({
                     <a
                       key={b.id}
                       href={b.url}
-                      target="_self"
+                      target={linkTarget === 'self' ? '_self' : '_blank'}
                       rel="noopener noreferrer"
                       draggable={true}
                       onDragStart={(e) => handleDragStart(e, b.id)}
@@ -848,4 +889,6 @@ export default function BookmarksWidget({
       )}
     </div>
   );
-}
+});
+
+export default BookmarksWidget;

@@ -59,4 +59,15 @@ export interface UserSettings {
     focus: boolean;
   };
   widgetOrder?: string[];
+  linkTarget?: 'self' | 'blank';
+  customSearchEngines?: CustomSearchEngine[];
 }
+
+export interface CustomSearchEngine {
+  id: string;
+  name: string;
+  url: string; // e.g., "https://example.com/search?q={query}"
+  shortcut: string; // e.g., "/yt", "!g", "/gh"
+  placeholder: string;
+}
+

@@ -1,4 +1,4 @@
-import { useState, useEffect, ChangeEvent } from 'react';
+import { useState, useEffect, ChangeEvent, memo } from 'react';
 import { StickyNote, Plus, Trash2, Copy, Check, FileText, ChevronDown } from 'lucide-react';
 import { QuickNote } from '../types';
 
@@ -9,7 +9,7 @@ interface NotesWidgetProps {
   onDeleteNote: (id: string) => void;
 }
 
-export default function NotesWidget({
+const NotesWidget = memo(function NotesWidget({
   notes,
   onAddNote,
   onUpdateNote,
@@ -191,4 +191,6 @@ export default function NotesWidget({
       )}
     </div>
   );
-}
+});
+
+export default NotesWidget;

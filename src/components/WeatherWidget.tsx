@@ -80,10 +80,28 @@ export default function WeatherWidget() {
   const [searchInput, setSearchInput] = useState('');
   const [isSearching, setIsSearching] = useState(false);
 
-  // Fetch weather based on current lat and lon
-  const fetchWeather = async (targetLat: number, targetLon: number, cityName: string) => {
+  // Fetch weather based on current lat and lon with local caching
+  const fetchWeather = async (targetLat: number, targetLon: number, cityName: string, forceRefresh: boolean = false) => {
     setLoading(true);
     setError(null);
+
+    const cacheKey = `weather_cache_${targetLat.toFixed(4)}_${targetLon.toFixed(4)}_${cityName}`;
+    const cachedItem = localStorage.getItem(cacheKey);
+    const EXPIRY_TIME = 15 * 60 * 1000; // 15 minutes
+
+    if (!forceRefresh && cachedItem) {
+      try {
+        const { timestamp, data } = JSON.parse(cachedItem);
+        if (Date.now() - timestamp < EXPIRY_TIME) {
+          setWeather(data);
+          setLoading(false);
+          return;
+        }
+      } catch (err) {
+        console.warn('Failed to parse cached weather', err);
+      }
+    }
+
     try {
       const response = await fetch(
         `https://api.open-meteo.com/v1/forecast?latitude=${targetLat}&longitude=${targetLon}&current=temperature_2m,relative_humidity_2m,is_day,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto`
@@ -123,7 +141,13 @@ export default function WeatherWidget() {
       };
 
       setWeather(weatherResult);
-      // Save to localStorage
+      // Cache the result
+      localStorage.setItem(cacheKey, JSON.stringify({
+        timestamp: Date.now(),
+        data: weatherResult
+      }));
+
+      // Save coords/city to localStorage
       localStorage.setItem('weatherCity', cityName);
       localStorage.setItem('weatherLat', targetLat.toString());
       localStorage.setItem('weatherLon', targetLon.toString());
@@ -155,6 +179,7 @@ export default function WeatherWidget() {
   useEffect(() => {
     fetchWeather(lat, lon, city);
   }, [lat, lon, city]);
+
 
   const handleSearchSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -282,7 +307,7 @@ export default function WeatherWidget() {
                 <Navigation className="w-3.5 h-3.5 rotate-45" />
               </button>
               <button
-                onClick={() => fetchWeather(lat, lon, city)}
+                onClick={() => fetchWeather(lat, lon, city, true)}
                 className={`p-1.5 rounded-xl hover:bg-neutral-100 dark:hover:bg-elegant-border text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-300 cursor-pointer ${loading ? 'animate-spin' : ''}`}
                 title="Refresh"
                 id="refresh-weather-btn"

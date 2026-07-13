@@ -1,12 +1,20 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   X, Settings, Check, RefreshCcw, Eye, EyeOff,
   ArrowUp, ArrowDown, Grid, Cloud, Clock, Bookmark, 
   CheckSquare, FileText, Search, Upload, Download, Copy,
   AlertCircle, CheckCircle2, CloudUpload, CloudDownload
 } from 'lucide-react';
-import { UserSettings, Bookmark as BookmarkType, TodoItem, QuickNote } from '../types';
+import { UserSettings, Bookmark as BookmarkType, TodoItem, QuickNote, CustomSearchEngine } from '../types';
 import { uploadToCloud, downloadFromCloud, generateSyncCode } from '../lib/syncService';
+import { auth, googleProvider } from '../lib/firebase';
+import { 
+  signInWithPopup, 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  signOut, 
+  onAuthStateChanged 
+} from 'firebase/auth';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -78,6 +86,197 @@ export default function SettingsModal({
   const [syncSuccess, setSyncSuccess] = useState<string | null>(null);
   const [isSyncCopied, setIsSyncCopied] = useState(false);
 
+  // --- Optional Secure Authentication State ---
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [showEmailForm, setShowEmailForm] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+
+  // --- Conflict Detection State ---
+  const [conflictData, setConflictData] = useState<{ local: any, cloud: any } | null>(null);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleEmailAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSyncError(null);
+    setSyncSuccess(null);
+    if (!email || !password) return;
+    try {
+      setIsSyncing(true);
+      if (isSignUp) {
+        await createUserWithEmailAndPassword(auth, email, password);
+        setSyncSuccess('Account registered successfully!');
+      } else {
+        await signInWithEmailAndPassword(auth, email, password);
+        setSyncSuccess('Signed in successfully!');
+      }
+      setEmail('');
+      setPassword('');
+      setShowEmailForm(false);
+    } catch (err: any) {
+      setSyncError(err?.message || 'Authentication failed');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleGoogleAuth = async () => {
+    setSyncError(null);
+    setSyncSuccess(null);
+    try {
+      setIsSyncing(true);
+      await signInWithPopup(auth, googleProvider);
+      setSyncSuccess('Signed in with Google successfully!');
+    } catch (err: any) {
+      setSyncError(err?.message || 'Google Sign-In failed');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+      setSyncSuccess('Signed out successfully.');
+    } catch (err: any) {
+      setSyncError(err?.message || 'Sign-out failed');
+    }
+  };
+
+  const handleLinkProfileToUser = async () => {
+    if (!syncCode || !currentUser) return;
+    try {
+      setIsSyncing(true);
+      setSyncError(null);
+      
+      const savedCatOrder = localStorage.getItem('bookmarksCategoryOrder');
+      const categoryOrder = savedCatOrder ? JSON.parse(savedCatOrder) : undefined;
+
+      await uploadToCloud(syncCode, {
+        settings,
+        bookmarks,
+        todos,
+        notes,
+        categoryOrder,
+        ownerId: currentUser.uid,
+      });
+
+      setSyncSuccess('🔐 Sync profile successfully secured to your account!');
+    } catch (err: any) {
+      setSyncError(err?.message || 'Failed to secure sync profile.');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // Simple smart merge function for non-conflicting records and list concatenation
+  const mergeData = (local: any, cloud: any) => {
+    const localBookMap = new Map((local.bookmarks || []).map((b: any) => [b.url, b]));
+    const cloudBookList = cloud.bookmarksList || [];
+    cloudBookList.forEach((b: any) => {
+      if (!localBookMap.has(b.url)) {
+        localBookMap.set(b.url, b);
+      }
+    });
+    const mergedBookmarks = Array.from(localBookMap.values());
+
+    const localTodoMap = new Map((local.todos || []).map((t: any) => [t.text, t]));
+    const cloudTodoList = cloud.todosList || [];
+    cloudTodoList.forEach((t: any) => {
+      if (!localTodoMap.has(t.text)) {
+        localTodoMap.set(t.text, t);
+      }
+    });
+    const mergedTodos = Array.from(localTodoMap.values());
+
+    const localNotesMap = new Map((local.notes || []).map((n: any) => [n.title, n]));
+    const cloudNotesList = cloud.notesList || [];
+    cloudNotesList.forEach((n: any) => {
+      if (!localNotesMap.has(n.title)) {
+        localNotesMap.set(n.title, n);
+      }
+    });
+    const mergedNotes = Array.from(localNotesMap.values());
+
+    return {
+      settings: local.settings,
+      bookmarks: mergedBookmarks,
+      todos: mergedTodos,
+      notes: mergedNotes
+    };
+  };
+
+  const handleResolveConflict = async (resolution: 'local' | 'cloud' | 'merge') => {
+    if (!conflictData) return;
+    setSyncError(null);
+    setSyncSuccess(null);
+    setIsSyncing(true);
+    try {
+      const code = syncCodeInput || syncCode;
+      const savedCatOrder = localStorage.getItem('bookmarksCategoryOrder');
+      const categoryOrder = savedCatOrder ? JSON.parse(savedCatOrder) : undefined;
+
+      if (resolution === 'local') {
+        await uploadToCloud(code, {
+          settings,
+          bookmarks,
+          todos,
+          notes,
+          categoryOrder,
+          ownerId: currentUser ? currentUser.uid : undefined
+        });
+        localStorage.setItem('lastSyncedAt', new Date().toISOString());
+        setSyncSuccess('Cloud overwritten with your local data!');
+      } else if (resolution === 'cloud') {
+        onImportData({
+          settings: conflictData.cloud.userSettings,
+          bookmarks: conflictData.cloud.bookmarksList,
+          todos: conflictData.cloud.todosList,
+          notes: conflictData.cloud.notesList,
+          categoryOrder: conflictData.cloud.bookmarksCategoryOrder,
+        });
+        localStorage.setItem('lastSyncedAt', conflictData.cloud.updatedAt);
+        setSyncSuccess('Local dashboard updated with Cloud changes!');
+      } else if (resolution === 'merge') {
+        const merged = mergeData(
+          { settings, bookmarks, todos, notes },
+          conflictData.cloud
+        );
+        onImportData({
+          settings: merged.settings,
+          bookmarks: merged.bookmarks as BookmarkType[],
+          todos: merged.todos as TodoItem[],
+          notes: merged.notes as QuickNote[],
+          categoryOrder: conflictData.cloud.bookmarksCategoryOrder,
+        });
+
+        await uploadToCloud(code, {
+          settings: merged.settings,
+          bookmarks: merged.bookmarks as BookmarkType[],
+          todos: merged.todos as TodoItem[],
+          notes: merged.notes as QuickNote[],
+          categoryOrder,
+          ownerId: currentUser ? currentUser.uid : undefined
+        });
+
+        localStorage.setItem('lastSyncedAt', new Date().toISOString());
+        setSyncSuccess('Successfully merged local and cloud data!');
+      }
+      setConflictData(null);
+    } catch (err: any) {
+      setSyncError(err?.message || 'Failed to resolve conflict.');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const handleGenerateNewCode = async () => {
     try {
       setIsSyncing(true);
@@ -115,6 +314,21 @@ export default function SettingsModal({
       setSyncError(null);
       setSyncSuccess(null);
 
+      // Conflict detection first!
+      const cloudData = await downloadFromCloud(syncCode);
+      const cloudUpdatedAt = new Date(cloudData.updatedAt || '1970-01-01');
+      const lastSyncedAt = new Date(localStorage.getItem('lastSyncedAt') || '1970-01-01');
+      const lastLocalChange = new Date(localStorage.getItem('lastLocalChange') || '1970-01-01');
+
+      if (lastLocalChange > lastSyncedAt && cloudUpdatedAt > lastSyncedAt) {
+        setConflictData({
+          local: { settings, bookmarks, todos, notes },
+          cloud: cloudData
+        });
+        setIsSyncing(false);
+        return;
+      }
+
       const savedCatOrder = localStorage.getItem('bookmarksCategoryOrder');
       const categoryOrder = savedCatOrder ? JSON.parse(savedCatOrder) : undefined;
 
@@ -124,8 +338,10 @@ export default function SettingsModal({
         todos,
         notes,
         categoryOrder,
+        ownerId: currentUser ? currentUser.uid : undefined
       });
 
+      localStorage.setItem('lastSyncedAt', new Date().toISOString());
       setSyncSuccess('Backup successfully uploaded to cloud!');
       setTimeout(() => setSyncSuccess(null), 3000);
     } catch (err: any) {
@@ -147,19 +363,33 @@ export default function SettingsModal({
       setSyncError(null);
       setSyncSuccess(null);
 
-      const result = await downloadFromCloud(targetCode);
+      const cloudData = await downloadFromCloud(targetCode);
+      const cloudUpdatedAt = new Date(cloudData.updatedAt || '1970-01-01');
+      const lastSyncedAt = new Date(localStorage.getItem('lastSyncedAt') || '1970-01-01');
+      const lastLocalChange = new Date(localStorage.getItem('lastLocalChange') || '1970-01-01');
+
+      if (lastLocalChange > lastSyncedAt && cloudUpdatedAt > lastSyncedAt) {
+        setConflictData({
+          local: { settings, bookmarks, todos, notes },
+          cloud: cloudData
+        });
+        setIsSyncing(false);
+        return;
+      }
+
       onImportData({
-        settings: result.userSettings,
-        bookmarks: result.bookmarksList,
-        todos: result.todosList,
-        notes: result.notesList,
-        categoryOrder: result.bookmarksCategoryOrder,
+        settings: cloudData.userSettings,
+        bookmarks: cloudData.bookmarksList,
+        todos: cloudData.todosList,
+        notes: cloudData.notesList,
+        categoryOrder: cloudData.bookmarksCategoryOrder,
       });
 
       const cleanCode = targetCode.trim().toUpperCase();
       onSaveSyncSettings(cleanCode, true);
       setSyncCodeInput(cleanCode);
 
+      localStorage.setItem('lastSyncedAt', cloudData.updatedAt || new Date().toISOString());
       setSyncSuccess('Dashboard synchronized from Cloud successfully!');
       setTimeout(() => setSyncSuccess(null), 4000);
     } catch (err: any) {
@@ -364,6 +594,33 @@ export default function SettingsModal({
             />
           </div>
 
+          {/* Link Opening Target Preference */}
+          <div>
+            <label className="block text-xs font-bold text-neutral-400 dark:text-neutral-500 uppercase tracking-wider mb-2">
+              Link Opening Behavior
+            </label>
+            <div className="grid grid-cols-2 gap-3" id="settings-link-target">
+              {['self', 'blank'].map((val) => {
+                const isSelected = (settings.linkTarget || 'blank') === val;
+                const label = val === 'self' ? 'Open in Current Tab' : 'Open in New Tab';
+                return (
+                  <button
+                    key={val}
+                    type="button"
+                    onClick={() => onUpdateSettings({ ...settings, linkTarget: val as any })}
+                    className={`flex items-center justify-center p-3 py-2.5 rounded-2xl border text-xs font-semibold transition-all cursor-pointer ${
+                      isSelected
+                        ? 'bg-neutral-900 text-white border-neutral-900 dark:bg-elegant-border dark:text-white dark:border-elegant-border shadow-sm'
+                        : 'bg-neutral-50 border-neutral-200 text-neutral-600 hover:border-neutral-300 dark:bg-elegant-card-darker dark:border-elegant-border dark:text-neutral-400'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Active Header Elements */}
           <div>
             <label className="block text-xs font-bold text-neutral-400 dark:text-neutral-500 uppercase tracking-wider mb-2.5">
@@ -536,6 +793,115 @@ export default function SettingsModal({
             </div>
           </div>
 
+          {/* Custom Search Engines & Shortcuts */}
+          <div className="border-t border-neutral-100 dark:border-elegant-border pt-5 space-y-4">
+            <div>
+              <h4 className="text-sm font-semibold text-neutral-800 dark:text-neutral-100 flex items-center gap-2">
+                <Search className="w-4 h-4 text-indigo-500" />
+                Custom Search Engines & Shortcuts
+              </h4>
+              <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-0.5">
+                Add custom search engines and shortcuts (e.g. prefixing search with <code className="font-mono text-indigo-500">/yt</code> or <code className="font-mono text-indigo-500">!g</code>). Use <code className="font-mono bg-neutral-100 dark:bg-neutral-800 px-1 py-0.5 rounded">{`{query}`}</code> in templates.
+              </p>
+            </div>
+
+            {/* List of custom search engines */}
+            <div className="space-y-2">
+              {(settings.customSearchEngines || []).map((engine) => (
+                <div key={engine.id} className="flex items-center justify-between p-3 rounded-2xl bg-neutral-50 dark:bg-elegant-card-darker/40 border border-neutral-200 dark:border-elegant-border text-xs">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-neutral-800 dark:text-white">{engine.name}</span>
+                      <span className="px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-mono font-bold text-[10px]">
+                        {engine.shortcut}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-neutral-400 dark:text-neutral-500 truncate mt-1 font-mono">
+                      {engine.url}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const updated = (settings.customSearchEngines || []).filter(e => e.id !== engine.id);
+                      onUpdateSettings({ ...settings, customSearchEngines: updated });
+                    }}
+                    className="p-1.5 text-neutral-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg transition-colors cursor-pointer ml-2 flex-shrink-0"
+                    title="Remove Engine"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+              
+              {/* Add form */}
+              <div className="p-4 rounded-2xl border border-dashed border-neutral-200 dark:border-elegant-border-hover bg-neutral-50/10 dark:bg-elegant-card-darker/5 space-y-3">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-500 block">
+                  Add Custom Search Engine
+                </span>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="text"
+                    placeholder="Name: e.g., YouTube"
+                    id="custom-engine-name"
+                    className="px-3 py-2 rounded-xl border border-neutral-200 dark:border-elegant-border bg-white dark:bg-elegant-card-darker text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500/40 text-neutral-800 dark:text-neutral-100"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Shortcut: e.g., /yt"
+                    id="custom-engine-shortcut"
+                    className="px-3 py-2 rounded-xl border border-neutral-200 dark:border-elegant-border bg-white dark:bg-elegant-card-darker text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500/40 text-neutral-800 dark:text-neutral-100 font-mono"
+                  />
+                </div>
+                <input
+                  type="text"
+                  placeholder="URL template: e.g., https://youtube.com/results?search_query={query}"
+                  id="custom-engine-url"
+                  className="w-full px-3 py-2 rounded-xl border border-neutral-200 dark:border-elegant-border bg-white dark:bg-elegant-card-darker text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500/40 text-neutral-800 dark:text-neutral-100"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nameInput = document.getElementById('custom-engine-name') as HTMLInputElement;
+                    const shortcutInput = document.getElementById('custom-engine-shortcut') as HTMLInputElement;
+                    const urlInput = document.getElementById('custom-engine-url') as HTMLInputElement;
+                    
+                    if (nameInput && shortcutInput && urlInput) {
+                      const name = nameInput.value.trim();
+                      const shortcut = shortcutInput.value.trim();
+                      const url = urlInput.value.trim();
+                      
+                      if (!name || !shortcut || !url) {
+                        alert('All fields are required to add a custom search engine.');
+                        return;
+                      }
+                      
+                      const formattedShortcut = shortcut.startsWith('/') || shortcut.startsWith('!') ? shortcut : '/' + shortcut;
+                      
+                      const newEngine: CustomSearchEngine = {
+                        id: 'custom-' + Date.now(),
+                        name,
+                        shortcut: formattedShortcut,
+                        url,
+                        placeholder: `Search ${name}...`
+                      };
+                      
+                      const updated = [...(settings.customSearchEngines || []), newEngine];
+                      onUpdateSettings({ ...settings, customSearchEngines: updated });
+                      
+                      nameInput.value = '';
+                      shortcutInput.value = '';
+                      urlInput.value = '';
+                    }
+                  }}
+                  className="w-full py-2 bg-neutral-900 hover:bg-neutral-800 dark:bg-neutral-100 dark:hover:bg-neutral-200 text-white dark:text-neutral-900 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-sm"
+                >
+                  Save New Search Engine
+                </button>
+              </div>
+            </div>
+          </div>
+
           {/* Cloud Sync & Backup */}
           <div className="border-t border-neutral-100 dark:border-elegant-border pt-5 space-y-4" id="cloud-sync-section">
             <div>
@@ -546,6 +912,141 @@ export default function SettingsModal({
               <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-0.5">
                 Save your dashboard to a secure cloud profile to sync your bookmarks, todos, and settings across all your browsers and devices.
               </p>
+            </div>
+
+            {/* Conflict Detection UI */}
+            {conflictData && (
+              <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/10 border border-amber-200 dark:border-amber-900/30 space-y-3 animate-in zoom-in-95 duration-150" id="sync-conflict-resolution">
+                <div className="flex items-start gap-2 text-amber-800 dark:text-amber-400">
+                  <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <h5 className="font-semibold text-xs">Sync Conflict Detected</h5>
+                    <p className="text-[11px] opacity-90 mt-0.5">
+                      Both your local browser and cloud profile have new changes since your last sync. How would you like to proceed?
+                    </p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => handleResolveConflict('local')}
+                    className="py-2 px-1 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] text-center transition-all cursor-pointer shadow-sm"
+                  >
+                    Keep Local
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleResolveConflict('cloud')}
+                    className="py-2 px-1 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] text-center transition-all cursor-pointer shadow-sm"
+                  >
+                    Keep Cloud
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleResolveConflict('merge')}
+                    className="py-2 px-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] text-center transition-all cursor-pointer shadow-sm"
+                  >
+                    Merge Both
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setConflictData(null)}
+                  className="w-full text-center text-[10px] font-semibold text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+
+            {/* Optional Secure Authentication UI */}
+            <div className="p-4 rounded-2xl bg-neutral-50 dark:bg-elegant-card-darker/20 border border-neutral-200 dark:border-elegant-border space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold text-neutral-400 dark:text-neutral-500 uppercase tracking-wider block">
+                  Optional Sync Authentication
+                </span>
+                {currentUser && (
+                  <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold px-1.5 py-0.5 rounded">
+                    Logged In
+                  </span>
+                )}
+              </div>
+              
+              {currentUser ? (
+                <div className="space-y-2">
+                  <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                    Logged in as <strong className="text-neutral-700 dark:text-neutral-200">{currentUser.email}</strong>
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleSignOut}
+                    className="w-full py-1.5 rounded-xl border border-neutral-200 hover:bg-neutral-100 dark:border-elegant-border dark:hover:bg-elegant-card-darker text-neutral-700 dark:text-neutral-200 text-xs font-bold transition-all cursor-pointer"
+                  >
+                    Logout Account
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-[11px] text-neutral-400 dark:text-neutral-500">
+                    Authenticate to lock sync profiles to your account and restrict other users from reading or overwriting your synced data.
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={handleGoogleAuth}
+                      className="py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all cursor-pointer text-center"
+                    >
+                      Google Sign-In
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowEmailForm(!showEmailForm);
+                        setIsSignUp(false);
+                      }}
+                      className="py-1.5 bg-neutral-800 hover:bg-neutral-900 text-white dark:bg-elegant-card-darker dark:hover:bg-elegant-border border border-transparent dark:border-elegant-border rounded-xl text-xs font-bold shadow-sm transition-all cursor-pointer text-center"
+                    >
+                      Email Login
+                    </button>
+                  </div>
+                  
+                  {showEmailForm && (
+                    <form onSubmit={handleEmailAuth} className="space-y-2 pt-1 animate-in slide-in-from-top-1 duration-150">
+                      <input
+                        type="email"
+                        placeholder="Email Address"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="w-full px-3 py-1.5 rounded-xl border border-neutral-200 dark:border-elegant-border bg-white dark:bg-elegant-card-darker text-xs focus:outline-none text-neutral-800 dark:text-neutral-100"
+                        required
+                      />
+                      <input
+                        type="password"
+                        placeholder="Password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="w-full px-3 py-1.5 rounded-xl border border-neutral-200 dark:border-elegant-border bg-white dark:bg-elegant-card-darker text-xs focus:outline-none text-neutral-800 dark:text-neutral-100"
+                        required
+                      />
+                      <div className="flex justify-between items-center pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setIsSignUp(!isSignUp)}
+                          className="text-[10px] text-indigo-500 font-semibold cursor-pointer hover:underline"
+                        >
+                          {isSignUp ? 'Already have an account? Sign In' : 'Need an account? Sign Up'}
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-3.5 py-1.5 bg-indigo-600 text-white rounded-xl text-xs font-bold cursor-pointer"
+                        >
+                          {isSignUp ? 'Register' : 'Sign In'}
+                        </button>
+                      </div>
+                    </form>
+                  )}
+                </div>
+              )}
             </div>
 
             {syncCode ? (
@@ -592,6 +1093,28 @@ export default function SettingsModal({
                     )}
                   </button>
                 </div>
+
+                {/* Profile Ownership Guard Display */}
+                {currentUser ? (
+                  <div className="pt-1.5 pb-0.5 px-1">
+                    <button
+                      type="button"
+                      onClick={handleLinkProfileToUser}
+                      className="w-full py-1.5 rounded-xl bg-indigo-50/80 hover:bg-indigo-100 text-indigo-600 dark:bg-indigo-950/20 dark:hover:bg-indigo-950/40 dark:text-indigo-400 text-[10px] font-bold transition-all cursor-pointer border border-indigo-100/40 dark:border-indigo-900/30 flex items-center justify-center gap-1.5"
+                    >
+                      🔐 Secure Profile to My Account
+                    </button>
+                    <p className="text-[9px] text-neutral-400 dark:text-neutral-500 text-center mt-1">
+                      Links this Sync Code exclusively to your logged-in email.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="pt-1 text-center">
+                    <span className="inline-block px-2 py-1 text-[9px] font-semibold bg-neutral-100 dark:bg-neutral-800 text-neutral-500 rounded-lg">
+                      👤 Anonymous Profile (Sign in to secure access)
+                    </span>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-2 gap-3.5 pt-1">
                   <button

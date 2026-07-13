@@ -30,6 +30,10 @@
         "bookmarksCategoryOrder": {
           "type": "array",
           "description": "Array of strings defining custom category order"
+        },
+        "ownerId": {
+          "type": "string",
+          "description": "UID of the authenticated owner of this profile, if linked"
         }
       }
     }

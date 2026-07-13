@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, memo } from 'react';
 import { CheckSquare, Square, Trash2, Plus, Filter, Sparkles } from 'lucide-react';
 import { TodoItem } from '../types';
 
@@ -10,7 +10,7 @@ interface TodoWidgetProps {
   onClearCompleted: () => void;
 }
 
-export default function TodoWidget({
+const TodoWidget = memo(function TodoWidget({
   todos,
   onAddTodo,
   onToggleTodo,
@@ -20,6 +20,7 @@ export default function TodoWidget({
   const [newText, setNewText] = useState('');
   const [newCategory, setNewCategory] = useState('Personal');
   const [filter, setFilter] = useState<'all' | 'active' | 'completed'>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string>('All');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,17 +29,28 @@ export default function TodoWidget({
     setNewText('');
   };
 
-  const filteredTodos = todos.filter((todo) => {
-    if (filter === 'active') return !todo.completed;
-    if (filter === 'completed') return todo.completed;
-    return true;
-  });
+  const categories = ['Personal', 'Work', 'Study', 'Shopping'];
+
+  const filteredTodos = useMemo(() => {
+    return todos.filter((todo) => {
+      const matchesStatus = filter === 'all'
+        ? true
+        : filter === 'active'
+        ? !todo.completed
+        : todo.completed;
+
+      const matchesCategory = categoryFilter === 'All'
+        ? true
+        : todo.category === categoryFilter;
+
+      return matchesStatus && matchesCategory;
+    });
+  }, [todos, filter, categoryFilter]);
+
 
   const completedCount = todos.filter((t) => t.completed).length;
   const totalCount = todos.length;
   const progressPercent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
-
-  const categories = ['Personal', 'Work', 'Study', 'Shopping'];
 
   return (
     <div className="bg-white dark:bg-elegant-card rounded-3xl p-6 border border-neutral-200 dark:border-elegant-border hover:dark:border-elegant-border-hover transition-all duration-300 shadow-sm flex flex-col justify-between h-full" id="todo-widget">
@@ -75,20 +87,36 @@ export default function TodoWidget({
         </div>
 
         {/* Filters */}
-        <div className="flex gap-1.5 mb-3.5" id="todo-filter-chips">
-          {(['all', 'active', 'completed'] as const).map((type) => (
-            <button
-              key={type}
-              onClick={() => setFilter(type)}
-              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                filter === type
-                  ? 'bg-neutral-900 text-white dark:bg-elegant-border dark:text-white shadow-sm'
-                  : 'bg-neutral-100 dark:bg-elegant-card-darker text-neutral-500 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-elegant-border'
-              }`}
-            >
-              {type}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3.5" id="todo-filters-wrapper">
+          <div className="flex gap-1" id="todo-filter-chips">
+            {(['all', 'active', 'completed'] as const).map((type) => (
+              <button
+                key={type}
+                onClick={() => setFilter(type)}
+                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                  filter === type
+                    ? 'bg-neutral-900 text-white dark:bg-elegant-border dark:text-white shadow-sm'
+                    : 'bg-neutral-100 dark:bg-elegant-card-darker text-neutral-500 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-elegant-border'
+                }`}
+              >
+                {type}
+              </button>
+            ))}
+          </div>
+
+          <select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            className="px-2 py-1 rounded-lg border border-neutral-200 dark:border-elegant-border bg-neutral-100 dark:bg-elegant-card-darker text-neutral-500 dark:text-neutral-400 text-[10px] font-bold focus:outline-none cursor-pointer hover:bg-neutral-200 dark:hover:bg-elegant-border transition-colors"
+            id="todo-category-filter-select"
+          >
+            <option value="All">All Categories</option>
+            {categories.map((cat) => (
+              <option key={cat} value={cat}>
+                {cat}
+              </option>
+            ))}
+          </select>
         </div>
 
         {/* Task List */}
@@ -178,4 +206,6 @@ export default function TodoWidget({
       </form>
     </div>
   );
-}
+});
+
+export default TodoWidget;

@@ -1,9 +1,6 @@
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
-import { db } from './firebase';
+import { db, auth } from './firebase';
 import { UserSettings, Bookmark, TodoItem, QuickNote } from '../types';
-
-const auth = getAuth();
 
 enum OperationType {
   CREATE = 'create',
@@ -61,6 +58,7 @@ export interface SyncProfileData {
   todosList: TodoItem[];
   notesList: QuickNote[];
   bookmarksCategoryOrder?: string[];
+  ownerId?: string | null;
 }
 
 /**
@@ -90,6 +88,7 @@ export async function uploadToCloud(
     todos: TodoItem[];
     notes: QuickNote[];
     categoryOrder?: string[];
+    ownerId?: string | null;
   }
 ): Promise<void> {
   if (!syncCode || !syncCode.trim()) {
@@ -99,7 +98,7 @@ export async function uploadToCloud(
   const cleanCode = syncCode.trim().toUpperCase();
   const docRef = doc(db, 'sync_profiles', cleanCode);
 
-  const payload = {
+  const payload: any = {
     version: '1.0',
     updatedAt: new Date().toISOString(),
     userSettings: data.settings,
@@ -107,6 +106,7 @@ export async function uploadToCloud(
     todosList: data.todos,
     notesList: data.notes,
     bookmarksCategoryOrder: data.categoryOrder || null,
+    ownerId: data.ownerId !== undefined ? data.ownerId : (auth.currentUser?.uid || null),
   };
 
   try {
@@ -147,5 +147,6 @@ export async function downloadFromCloud(syncCode: string): Promise<SyncProfileDa
     todosList: data.todosList || [],
     notesList: data.notesList || [],
     bookmarksCategoryOrder: data.bookmarksCategoryOrder || undefined,
+    ownerId: data.ownerId || null,
   };
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { 
   Sparkles, Sun, Moon, Settings, RefreshCw, AlertCircle, Bookmark as BookmarkIcon,
   Quote, Info, ExternalLink, HelpCircle
@@ -103,18 +103,22 @@ export default function App() {
   // --- Effects to sync with LocalStorage ---
   useEffect(() => {
     localStorage.setItem('userSettings', JSON.stringify(settings));
+    localStorage.setItem('lastLocalChange', new Date().toISOString());
   }, [settings]);
 
   useEffect(() => {
     localStorage.setItem('bookmarksList', JSON.stringify(bookmarks));
+    localStorage.setItem('lastLocalChange', new Date().toISOString());
   }, [bookmarks]);
 
   useEffect(() => {
     localStorage.setItem('todosList', JSON.stringify(todos));
+    localStorage.setItem('lastLocalChange', new Date().toISOString());
   }, [todos]);
 
   useEffect(() => {
     localStorage.setItem('notesList', JSON.stringify(notes));
+    localStorage.setItem('lastLocalChange', new Date().toISOString());
   }, [notes]);
 
   // --- Auto Sync Effect to Cloud ---
@@ -154,64 +158,68 @@ export default function App() {
   }, [settings.theme]);
 
   // --- Bookmark Handlers ---
-  const handleAddBookmark = (newB: Bookmark) => {
-    setBookmarks([...bookmarks, newB]);
-  };
+  const handleAddBookmark = useCallback((newB: Bookmark) => {
+    setBookmarks((prev) => [...prev, newB]);
+  }, []);
 
-  const handleDeleteBookmark = (id: string) => {
-    setBookmarks(bookmarks.filter((b) => b.id !== id));
-  };
+  const handleDeleteBookmark = useCallback((id: string) => {
+    setBookmarks((prev) => prev.filter((b) => b.id !== id));
+  }, []);
 
-  const handleUpdateBookmark = (updatedB: Bookmark) => {
-    setBookmarks(bookmarks.map((b) => (b.id === updatedB.id ? updatedB : b)));
-  };
+  const handleUpdateBookmark = useCallback((updatedB: Bookmark) => {
+    setBookmarks((prev) => prev.map((b) => (b.id === updatedB.id ? updatedB : b)));
+  }, []);
 
-  const handleReorderBookmarks = (newBookmarks: Bookmark[]) => {
+  const handleReorderBookmarks = useCallback((newBookmarks: Bookmark[]) => {
     setBookmarks(newBookmarks);
-  };
+  }, []);
 
   // --- Todo Handlers ---
-  const handleAddTodo = (text: string, category: string) => {
+  const handleAddTodo = useCallback((text: string, category: string) => {
     const newTodo: TodoItem = {
       id: Date.now().toString(),
       text,
       completed: false,
       category,
     };
-    setTodos([...todos, newTodo]);
-  };
+    setTodos((prev) => [...prev, newTodo]);
+  }, []);
 
-  const handleToggleTodo = (id: string) => {
-    setTodos(todos.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t)));
-  };
+  const handleToggleTodo = useCallback((id: string) => {
+    setTodos((prev) => prev.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t)));
+  }, []);
 
-  const handleDeleteTodo = (id: string) => {
-    setTodos(todos.filter((t) => t.id !== id));
-  };
+  const handleDeleteTodo = useCallback((id: string) => {
+    setTodos((prev) => prev.filter((t) => t.id !== id));
+  }, []);
 
-  const handleClearCompleted = () => {
-    setTodos(todos.filter((t) => !t.completed));
-  };
+  const handleClearCompleted = useCallback(() => {
+    setTodos((prev) => prev.filter((t) => !t.completed));
+  }, []);
 
   // --- Notes Handlers ---
-  const handleAddNote = () => {
-    const newNote: QuickNote = {
-      id: Date.now().toString(),
-      title: `Draft Note ${notes.length + 1}`,
-      content: '',
-      updatedAt: new Date().toISOString(),
-    };
-    setNotes([newNote, ...notes]);
-  };
+  const handleAddNote = useCallback(() => {
+    setNotes((prev) => {
+      const newNote: QuickNote = {
+        id: Date.now().toString(),
+        title: `Draft Note ${prev.length + 1}`,
+        content: '',
+        updatedAt: new Date().toISOString(),
+      };
+      return [newNote, ...prev];
+    });
+  }, []);
 
-  const handleUpdateNote = (updatedN: QuickNote) => {
-    setNotes(notes.map((n) => (n.id === updatedN.id ? updatedN : n)));
-  };
+  const handleUpdateNote = useCallback((updatedN: QuickNote) => {
+    setNotes((prev) => prev.map((n) => (n.id === updatedN.id ? updatedN : n)));
+  }, []);
 
-  const handleDeleteNote = (id: string) => {
-    if (notes.length <= 1) return; // Keep at least one
-    setNotes(notes.filter((n) => n.id !== id));
-  };
+  const handleDeleteNote = useCallback((id: string) => {
+    setNotes((prev) => {
+      if (prev.length <= 1) return prev; // Keep at least one
+      return prev.filter((n) => n.id !== id);
+    });
+  }, []);
 
   // --- Other Actions ---
   const handleCycleQuote = () => {
@@ -355,6 +363,8 @@ export default function App() {
             <SearchBar 
               currentEngine={settings.searchEngine}
               onEngineChange={(engine) => setSettings({ ...settings, searchEngine: engine })}
+              customSearchEngines={settings.customSearchEngines || []}
+              linkTarget={settings.linkTarget || 'blank'}
             />
           )}
 
@@ -395,6 +405,7 @@ export default function App() {
                     onDeleteBookmark={handleDeleteBookmark}
                     onUpdateBookmark={handleUpdateBookmark}
                     onReorderBookmarks={handleReorderBookmarks}
+                    linkTarget={settings.linkTarget || 'blank'}
                   />
                 </div>
               );

@@ -9,10 +9,32 @@ service cloud.firestore {
 
     match /sync_profiles/{profileId} {
       // Validate the document ID (sync code) format to prevent resource poisoning
-      allow read: if isValidId(profileId);
+      allow read: if isValidId(profileId) && (
+        !resource.data.keys().hasAll(['ownerId']) || 
+        resource.data.ownerId == null || 
+        (request.auth != null && resource.data.ownerId == request.auth.uid)
+      );
       
-      allow create, update: if isValidId(profileId) 
-        && isValidSyncProfile(request.resource.data);
+      allow create: if isValidId(profileId) 
+        && isValidSyncProfile(request.resource.data)
+        && (
+          !request.resource.data.keys().hasAll(['ownerId']) || 
+          request.resource.data.ownerId == null || 
+          (request.auth != null && request.resource.data.ownerId == request.auth.uid)
+        );
+
+      allow update: if isValidId(profileId) 
+        && isValidSyncProfile(request.resource.data)
+        && (
+          // Case 1: Existing profile was anonymous
+          (!resource.data.keys().hasAll(['ownerId']) || resource.data.ownerId == null) &&
+          (!request.resource.data.keys().hasAll(['ownerId']) || request.resource.data.ownerId == null || (request.auth != null && request.resource.data.ownerId == request.auth.uid))
+        ) || (
+          // Case 2: Existing profile is owned by a user
+          resource.data.keys().hasAll(['ownerId']) && resource.data.ownerId != null &&
+          request.auth != null && resource.data.ownerId == request.auth.uid &&
+          request.resource.data.keys().hasAll(['ownerId']) && request.resource.data.ownerId == resource.data.ownerId
+        );
         
       allow delete: if false; // Deletion is not exposed in the app
     }
@@ -23,14 +45,15 @@ service cloud.firestore {
 
     function isValidSyncProfile(data) {
       return data.keys().hasAll(['version', 'updatedAt', 'userSettings', 'bookmarksList', 'todosList', 'notesList', 'bookmarksCategoryOrder'])
-        && data.keys().size() == 7
+        && (data.keys().size() == 7 || (data.keys().size() == 8 && data.keys().hasAll(['ownerId'])))
         && data.version is string && data.version.size() <= 10
         && data.updatedAt is string && data.updatedAt.size() <= 50
         && data.userSettings is map
         && data.bookmarksList is list && data.bookmarksList.size() <= 1000
         && data.todosList is list && data.todosList.size() <= 1000
         && data.notesList is list && data.notesList.size() <= 1000
-        && (data.bookmarksCategoryOrder == null || (data.bookmarksCategoryOrder is list && data.bookmarksCategoryOrder.size() <= 100));
+        && (data.bookmarksCategoryOrder == null || (data.bookmarksCategoryOrder is list && data.bookmarksCategoryOrder.size() <= 100))
+        && (!data.keys().hasAll(['ownerId']) || data.ownerId == null || (data.ownerId is string && data.ownerId.size() <= 128));
     }
   }
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo } from 'react';
 import { Edit2, Check } from 'lucide-react';
 
 interface ClockWidgetProps {
@@ -6,7 +6,7 @@ interface ClockWidgetProps {
   onNameChange: (name: string) => void;
 }
 
-export default function ClockWidget({ userName, onNameChange }: ClockWidgetProps) {
+const ClockWidget = memo(function ClockWidget({ userName, onNameChange }: ClockWidgetProps) {
   const [time, setTime] = useState(new Date());
   const [isEditing, setIsEditing] = useState(false);
   const [tempName, setTempName] = useState(userName);
@@ -136,4 +136,6 @@ export default function ClockWidget({ userName, onNameChange }: ClockWidgetProps
       </div>
     </div>
   );
-}
+});
+
+export default ClockWidget;
