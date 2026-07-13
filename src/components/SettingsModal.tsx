@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { UserSettings, Bookmark as BookmarkType, TodoItem, QuickNote, CustomSearchEngine } from '../types';
 import { uploadToCloud, downloadFromCloud, generateSyncCode } from '../lib/syncService';
-import { auth, googleProvider } from '../lib/firebase';
+import { auth, googleProvider, getCustomFirebaseConfig, saveCustomFirebaseConfig } from '../lib/firebase';
 import { 
   signInWithPopup, 
   signInWithEmailAndPassword, 
@@ -96,6 +96,71 @@ export default function SettingsModal({
   // --- Conflict Detection State ---
   const [conflictData, setConflictData] = useState<{ local: any, cloud: any } | null>(null);
 
+  // --- Custom Firebase Config State ---
+  const [isUsingCustomFirebase, setIsUsingCustomFirebase] = useState(!!getCustomFirebaseConfig());
+  const [showCustomFirebase, setShowCustomFirebase] = useState(false);
+  const [customFirebaseJson, setCustomFirebaseJson] = useState(() => {
+    const config = getCustomFirebaseConfig();
+    return config ? JSON.stringify(config, null, 2) : '';
+  });
+  const [customFirebaseInputError, setCustomFirebaseInputError] = useState<string | null>(null);
+
+  const handleSaveCustomFirebase = () => {
+    setCustomFirebaseInputError(null);
+    if (!customFirebaseJson.trim()) {
+      saveCustomFirebaseConfig(null);
+      setIsUsingCustomFirebase(false);
+      return;
+    }
+
+    try {
+      let cleanJson = customFirebaseJson.trim();
+      
+      // If they paste the entire javascript block, extract the config object
+      if (cleanJson.includes('firebaseConfig =')) {
+        const matches = cleanJson.match(/firebaseConfig\s*=\s*({[\s\S]*?});?/);
+        if (matches && matches[1]) {
+          cleanJson = matches[1];
+        }
+      } else if (cleanJson.includes('const firebaseConfig') || cleanJson.includes('let firebaseConfig')) {
+        const matches = cleanJson.match(/(?:const|let|var)\s+firebaseConfig\s*=\s*({[\s\S]*?});?/);
+        if (matches && matches[1]) {
+          cleanJson = matches[1];
+        }
+      }
+
+      let parsed: any;
+      try {
+        parsed = JSON.parse(cleanJson);
+      } catch (jsonErr) {
+        // Fallback to evaluating as a JS object literal safely
+        try {
+          parsed = new Function(`return (${cleanJson})`)();
+        } catch (evalErr) {
+          throw new Error('Invalid JSON or Javascript object formatting. Please make sure the config is a valid object containing apiKey, authDomain, and projectId.');
+        }
+      }
+
+      if (!parsed || typeof parsed !== 'object') {
+        throw new Error('Configuration must be a valid object.');
+      }
+
+      const requiredFields = ['apiKey', 'authDomain', 'projectId'];
+      const missingFields = requiredFields.filter(f => !parsed[f]);
+      if (missingFields.length > 0) {
+        throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
+      }
+
+      saveCustomFirebaseConfig(parsed);
+    } catch (err: any) {
+      setCustomFirebaseInputError(err.message || 'Failed to parse configuration');
+    }
+  };
+
+  const handleResetCustomFirebase = () => {
+    saveCustomFirebaseConfig(null);
+  };
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
@@ -135,7 +200,11 @@ export default function SettingsModal({
       await signInWithPopup(auth, googleProvider);
       setSyncSuccess('Signed in with Google successfully!');
     } catch (err: any) {
-      setSyncError(err?.message || 'Google Sign-In failed');
+      if (err?.code === 'auth/unauthorized-domain' || err?.message?.includes('unauthorized-domain') || err?.message?.includes('unauthorized domain')) {
+        setSyncError("Google Sign-In is blocked on custom domains on this Firebase tier. Please use the 'Email Login' option instead—it works perfectly everywhere without any domain authorization!");
+      } else {
+        setSyncError(err?.message || 'Google Sign-In failed');
+      }
     } finally {
       setIsSyncing(false);
     }
@@ -1009,6 +1078,10 @@ export default function SettingsModal({
                       Email Login
                     </button>
                   </div>
+
+                  <p className="text-[10px] text-neutral-400 dark:text-neutral-500 leading-relaxed text-center">
+                    💡 <strong>Tip:</strong> If hosting on custom domains (e.g., Cloudflare Pages) and Google Sign-In fails with an unauthorized domain error, please use <strong>Email Login</strong>—it works seamlessly everywhere without domain restrictions!
+                  </p>
                   
                   {showEmailForm && (
                     <form onSubmit={handleEmailAuth} className="space-y-2 pt-1 animate-in slide-in-from-top-1 duration-150">
@@ -1047,6 +1120,114 @@ export default function SettingsModal({
                   )}
                 </div>
               )}
+            </div>
+
+            {/* Custom Firebase Project Configuration */}
+            <div className="p-4 rounded-2xl bg-neutral-50 dark:bg-elegant-card-darker/20 border border-neutral-200 dark:border-elegant-border space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold text-neutral-400 dark:text-neutral-500 uppercase tracking-wider block">
+                  Custom Firebase Project (Custom Domains)
+                </span>
+                {isUsingCustomFirebase ? (
+                  <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold px-1.5 py-0.5 rounded flex items-center gap-1 animate-pulse">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                    Custom Active
+                  </span>
+                ) : (
+                  <span className="text-[10px] bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold px-1.5 py-0.5 rounded">
+                    Default Sandbox
+                  </span>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-[11px] text-neutral-500 dark:text-neutral-400 leading-relaxed">
+                  The automated AI Studio starter project is sandboxed and does not allow adding custom authorized domains. If you are hosting this startpage on <strong>Cloudflare Pages</strong> or another custom domain, you can connect it to your own 100% free Firebase project!
+                </p>
+
+                {!showCustomFirebase && (
+                  <button
+                    type="button"
+                    onClick={() => setShowCustomFirebase(true)}
+                    className="w-full py-1.5 rounded-xl border border-dashed border-neutral-300 dark:border-elegant-border hover:bg-neutral-100 dark:hover:bg-elegant-card-darker text-neutral-700 dark:text-neutral-300 text-xs font-semibold transition-all cursor-pointer text-center block"
+                  >
+                    {isUsingCustomFirebase ? '⚙️ Manage Custom Firebase Config' : '🔌 Connect Your Own Firebase Project'}
+                  </button>
+                )}
+
+                {showCustomFirebase && (
+                  <div className="space-y-3 pt-1 animate-in fade-in-50 slide-in-from-top-1 duration-200">
+                    <div className="text-[10.5px] text-neutral-500 dark:text-neutral-400 space-y-1.5 bg-white dark:bg-elegant-card-darker/50 p-3 rounded-xl border border-neutral-200/60 dark:border-elegant-border">
+                      <div className="font-bold text-neutral-700 dark:text-neutral-300">How to set up:</div>
+                      <ol className="list-decimal list-inside space-y-1 pl-1">
+                        <li>Go to <a href="https://console.firebase.google.com" target="_blank" rel="noopener noreferrer" className="text-indigo-500 hover:underline">console.firebase.google.com</a> & create a free project.</li>
+                        <li>In your project settings, add a <strong>Web App</strong>.</li>
+                        <li>Copy the <code>firebaseConfig</code> code block or JSON.</li>
+                        <li>Paste it below and click Save!</li>
+                      </ol>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-neutral-400 dark:text-neutral-500 uppercase tracking-wide block">
+                        Firebase Web App Config JSON or Javascript Block
+                      </label>
+                      <textarea
+                        rows={6}
+                        placeholder={`{
+  "apiKey": "AIzaSy...",
+  "authDomain": "your-app.firebaseapp.com",
+  "projectId": "your-app",
+  "storageBucket": "your-app.appspot.com",
+  "messagingSenderId": "123456789",
+  "appId": "1:1234:web:abcd"
+}`}
+                        value={customFirebaseJson}
+                        onChange={(e) => setCustomFirebaseJson(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-neutral-200 dark:border-elegant-border bg-white dark:bg-elegant-card-darker text-[11px] font-mono focus:outline-none text-neutral-800 dark:text-neutral-100 resize-none leading-relaxed"
+                      />
+                    </div>
+
+                    {customFirebaseInputError && (
+                      <div className="flex items-start gap-2 p-2.5 rounded-xl bg-red-500/5 border border-red-500/20 text-red-600 dark:text-red-400 text-[10.5px] leading-relaxed">
+                        <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                        <span>{customFirebaseInputError}</span>
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleSaveCustomFirebase}
+                        className="flex-1 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all cursor-pointer text-center"
+                      >
+                        Save & Apply Config
+                      </button>
+                      
+                      {isUsingCustomFirebase && (
+                        <button
+                          type="button"
+                          onClick={handleResetCustomFirebase}
+                          className="py-1.5 px-3 border border-red-200 hover:bg-red-500/10 dark:border-red-900/30 text-red-500 rounded-xl text-xs font-bold transition-all cursor-pointer text-center"
+                          title="Reset to Default Starter Sandbox"
+                        >
+                          Reset to Sandbox
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowCustomFirebase(false);
+                          setCustomFirebaseInputError(null);
+                        }}
+                        className="py-1.5 px-3 border border-neutral-200 hover:bg-neutral-100 dark:border-elegant-border dark:hover:bg-elegant-card-darker text-neutral-500 dark:text-neutral-400 rounded-xl text-xs font-semibold transition-all cursor-pointer text-center"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             {syncCode ? (
