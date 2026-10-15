@@ -29,25 +29,19 @@ interface FirestoreErrorInfo {
 }
 
 function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): never {
-  const currentUser = auth.currentUser;
-  const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: currentUser?.uid || null,
-      email: currentUser?.email || null,
-      emailVerified: currentUser?.emailVerified || null,
-      isAnonymous: currentUser?.isAnonymous || null,
-      tenantId: currentUser?.tenantId || null,
-      providerInfo: currentUser?.providerData?.map(provider => ({
-        providerId: provider.providerId,
-        email: provider.email,
-      })) || []
-    },
-    operationType,
-    path
-  };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+  const rawMsg = error instanceof Error ? error.message : String(error);
+  console.error(`Firestore ${operationType} failed on ${path}:`, rawMsg);
+
+  if (rawMsg.includes('permission-denied') || rawMsg.includes('Missing or insufficient permissions')) {
+    throw new Error('Access denied: You do not have permission to access or modify this cloud profile.');
+  }
+  if (rawMsg.includes('not-found')) {
+    throw new Error('Cloud profile not found.');
+  }
+  if (rawMsg.includes('unavailable')) {
+    throw new Error('Network error: Unable to connect to Firebase cloud services.');
+  }
+  throw new Error(`Cloud operation failed: ${rawMsg}`);
 }
 
 export interface SyncProfileData {
@@ -62,19 +56,22 @@ export interface SyncProfileData {
 }
 
 /**
- * Generate a cryptographically secure-looking and human-friendly sync code
+ * Generate a cryptographically secure and human-friendly sync code
  * e.g., "SP-A8F2-9D7E"
  */
 export function generateSyncCode(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Avoid ambiguous chars like I, O, 0, 1
-  const randSegment = (len: number) => {
-    let result = '';
-    for (let i = 0; i < len; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length));
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 32 characters (no I, O, 0, 1)
+  const bytes = new Uint8Array(8);
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+    crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < 8; i++) {
+      bytes[i] = Math.floor(Math.random() * 256);
     }
-    return result;
-  };
-  return `SP-${randSegment(4)}-${randSegment(4)}`;
+  }
+  const part1 = Array.from(bytes.slice(0, 4), (b) => chars[b % chars.length]).join('');
+  const part2 = Array.from(bytes.slice(4, 8), (b) => chars[b % chars.length]).join('');
+  return `SP-${part1}-${part2}`;
 }
 
 /**

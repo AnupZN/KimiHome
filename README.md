@@ -194,4 +194,7 @@ export default defineConfig({
 
 ## 🔒 Security & Privacy
 
-KimiHome is designed around an **Offline-First, Zero-Tracking** architecture. None of your bookmarks, tasks, notes, or search terms are ever sent to an external server. Everything resides securely in your browser's local sandbox storage, giving you full telemetry privacy and blazing-fast loading speeds under any network state.
+KimiHome is engineered with an **Offline-First, Zero-Tracking** philosophy:
+- **Offline By Default**: By default, 100% of your bookmarks, scratchpad notes, tasks, and layout settings are stored locally in your browser's HTML5 LocalStorage. No tracking or telemetry scripts are present.
+- **Optional Cloud Sync**: If you choose to synchronize across devices, KimiHome allows backing up your dashboard to Firebase Firestore using a unique, cryptographically random Sync Code (`SP-XXXX-XXXX`). Sync profiles can be linked to your authenticated account or kept strictly decoupled.
+- **Custom Backend Support**: You can easily bring your own Firebase project credentials by setting environment variables (`VITE_FIREBASE_API_KEY`, etc.) as documented in `.env.example`.

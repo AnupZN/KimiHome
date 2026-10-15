@@ -62,6 +62,18 @@ export default function SettingsModal({
   autoSync,
   onSaveSyncSettings,
 }: SettingsModalProps) {
+  // Support closing modal with Escape key
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   // --- Backup & Restore State ---
@@ -363,24 +375,35 @@ export default function SettingsModal({
       setImportSuccess(false);
       const parsed = JSON.parse(jsonString);
       
-      if (!parsed || (typeof parsed !== 'object')) {
-        throw new Error('Invalid backup format: Must be a JSON object');
-      }
+      const sanitizeUrl = (u: any) => {
+        if (typeof u !== 'string') return 'about:blank';
+        const trimmed = u.trim();
+        return /^(https?:\/\/)/i.test(trimmed) ? trimmed : 'about:blank';
+      };
 
-      const hasSettings = parsed.userSettings && typeof parsed.userSettings === 'object';
-      const hasBookmarks = Array.isArray(parsed.bookmarksList);
-      const hasTodos = Array.isArray(parsed.todosList);
-      const hasNotes = Array.isArray(parsed.notesList);
+      const validBookmarks = Array.isArray(parsed.bookmarksList)
+        ? parsed.bookmarksList
+            .filter((b: any) => b && typeof b === 'object' && b.id && b.title)
+            .map((b: any) => ({
+              ...b,
+              url: sanitizeUrl(b.url),
+              iconUrl: b.iconUrl ? sanitizeUrl(b.iconUrl) : undefined,
+            }))
+        : undefined;
 
-      if (!hasSettings && !hasBookmarks && !hasTodos && !hasNotes) {
-        throw new Error('No valid startpage data found in this backup.');
-      }
+      const validTodos = Array.isArray(parsed.todosList)
+        ? parsed.todosList.filter((t: any) => t && typeof t === 'object' && t.id && t.text)
+        : undefined;
+
+      const validNotes = Array.isArray(parsed.notesList)
+        ? parsed.notesList.filter((n: any) => n && typeof n === 'object' && n.id && n.title !== undefined)
+        : undefined;
 
       onImportData({
         settings: parsed.userSettings,
-        bookmarks: parsed.bookmarksList,
-        todos: parsed.todosList,
-        notes: parsed.notesList,
+        bookmarks: validBookmarks,
+        todos: validTodos,
+        notes: validNotes,
         categoryOrder: parsed.bookmarksCategoryOrder || undefined
       });
 
@@ -775,6 +798,11 @@ export default function SettingsModal({
                       
                       if (!name || !shortcut || !url) {
                         alert('All fields are required to add a custom search engine.');
+                        return;
+                      }
+
+                      if (!/^https?:\/\//i.test(url)) {
+                        alert('Search engine URL must begin with http:// or https://');
                         return;
                       }
                       

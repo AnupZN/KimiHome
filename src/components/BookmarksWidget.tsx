@@ -195,6 +195,17 @@ const BookmarksWidget = memo(function BookmarksWidget({
   }, [categoryOrder]);
 
   useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen]);
+
+  useEffect(() => {
     if (!containerRef.current) return;
     const observer = new ResizeObserver((entries) => {
       for (let entry of entries) {
@@ -287,6 +298,9 @@ const BookmarksWidget = memo(function BookmarksWidget({
       formattedUrl = 'https://' + formattedUrl;
     }
 
+    const cleanIconUrl = customIconUrl.trim();
+    const safeIconUrl = /^https?:\/\//i.test(cleanIconUrl) ? cleanIconUrl : undefined;
+
     const bookmarkData: Bookmark = {
       id: editingId || Date.now().toString(),
       title: title.trim(),
@@ -294,7 +308,7 @@ const BookmarksWidget = memo(function BookmarksWidget({
       category: finalCategory,
       color,
       icon,
-      iconUrl: customIconUrl.trim() || undefined,
+      iconUrl: safeIconUrl,
     };
 
     if (isCreatingCategory) {

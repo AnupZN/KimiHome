@@ -1,10 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
-import { 
-  Sparkles, Sun, Moon, Settings, RefreshCw, AlertCircle, Bookmark as BookmarkIcon,
-  Quote, Info, ExternalLink, HelpCircle
-} from 'lucide-react';
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
+import { Settings } from 'lucide-react';
 import { Bookmark, TodoItem, QuickNote, UserSettings } from './types';
-import { uploadToCloud, downloadFromCloud, generateSyncCode } from './lib/syncService';
+import { uploadToCloud } from './lib/syncService';
 
 // Import components
 import ClockWidget from './components/ClockWidget';
@@ -14,7 +11,9 @@ import WeatherWidget from './components/WeatherWidget';
 import TodoWidget from './components/TodoWidget';
 import FocusWidget from './components/FocusWidget';
 import NotesWidget from './components/NotesWidget';
-import SettingsModal from './components/SettingsModal';
+
+// Lazy load SettingsModal to drastically reduce initial bundle size
+const SettingsModal = lazy(() => import('./components/SettingsModal'));
 
 // Default values
 const DEFAULT_BOOKMARKS: Bookmark[] = [
@@ -100,25 +99,35 @@ export default function App() {
     return localStorage.getItem('startpage_auto_sync') === 'true';
   });
 
+  const isImportingRef = useRef(false);
+
   // --- Effects to sync with LocalStorage ---
   useEffect(() => {
     localStorage.setItem('userSettings', JSON.stringify(settings));
-    localStorage.setItem('lastLocalChange', new Date().toISOString());
+    if (!isImportingRef.current) {
+      localStorage.setItem('lastLocalChange', new Date().toISOString());
+    }
   }, [settings]);
 
   useEffect(() => {
     localStorage.setItem('bookmarksList', JSON.stringify(bookmarks));
-    localStorage.setItem('lastLocalChange', new Date().toISOString());
+    if (!isImportingRef.current) {
+      localStorage.setItem('lastLocalChange', new Date().toISOString());
+    }
   }, [bookmarks]);
 
   useEffect(() => {
     localStorage.setItem('todosList', JSON.stringify(todos));
-    localStorage.setItem('lastLocalChange', new Date().toISOString());
+    if (!isImportingRef.current) {
+      localStorage.setItem('lastLocalChange', new Date().toISOString());
+    }
   }, [todos]);
 
   useEffect(() => {
     localStorage.setItem('notesList', JSON.stringify(notes));
-    localStorage.setItem('lastLocalChange', new Date().toISOString());
+    if (!isImportingRef.current) {
+      localStorage.setItem('lastLocalChange', new Date().toISOString());
+    }
   }, [notes]);
 
   // --- Auto Sync Effect to Cloud ---
@@ -237,13 +246,40 @@ export default function App() {
     notes?: QuickNote[];
     categoryOrder?: string[];
   }) => {
-    if (data.settings) setSettings(data.settings);
-    if (data.bookmarks) setBookmarks(data.bookmarks);
+    isImportingRef.current = true;
+    const sanitizeUrl = (url?: string) => {
+      const trimmed = (url || '').trim();
+      if (/^(javascript:|data:text\/html)/i.test(trimmed)) {
+        return 'about:blank';
+      }
+      return trimmed;
+    };
+
+    if (data.settings) {
+      const sanitizedSettings: UserSettings = {
+        ...data.settings,
+        customSearchEngines: (data.settings.customSearchEngines || []).map((e) => ({
+          ...e,
+          url: sanitizeUrl(e.url),
+        })),
+      };
+      setSettings(sanitizedSettings);
+    }
+    if (data.bookmarks) {
+      const sanitizedBookmarks = data.bookmarks.map((b) => ({
+        ...b,
+        url: sanitizeUrl(b.url),
+      }));
+      setBookmarks(sanitizedBookmarks);
+    }
     if (data.todos) setTodos(data.todos);
     if (data.notes) setNotes(data.notes);
     if (data.categoryOrder) {
       localStorage.setItem('bookmarksCategoryOrder', JSON.stringify(data.categoryOrder));
     }
+    setTimeout(() => {
+      isImportingRef.current = false;
+    }, 300);
   };
 
   const handleResetData = () => {
@@ -446,20 +482,24 @@ export default function App() {
       </footer>
 
       {/* Settings Panel Modal */}
-      <SettingsModal 
-        isOpen={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        settings={settings}
-        onUpdateSettings={setSettings}
-        onResetData={handleResetData}
-        bookmarks={bookmarks}
-        todos={todos}
-        notes={notes}
-        onImportData={handleImportData}
-        syncCode={syncCode}
-        autoSync={autoSync}
-        onSaveSyncSettings={handleSaveSyncSettings}
-      />
+      {settingsOpen && (
+        <Suspense fallback={null}>
+          <SettingsModal 
+            isOpen={settingsOpen}
+            onClose={() => setSettingsOpen(false)}
+            settings={settings}
+            onUpdateSettings={setSettings}
+            onResetData={handleResetData}
+            bookmarks={bookmarks}
+            todos={todos}
+            notes={notes}
+            onImportData={handleImportData}
+            syncCode={syncCode}
+            autoSync={autoSync}
+            onSaveSyncSettings={handleSaveSyncSettings}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }

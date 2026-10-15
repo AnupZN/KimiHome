@@ -133,6 +133,8 @@ export default function WeatherWidget() {
         city: cityName,
         temp: Math.round(current.temperature_2m),
         condition: conditionInfo.text,
+        weatherCode: current.weather_code,
+        isDay: current.is_day === 1,
         tempMax: Math.round(daily.temperature_2m_max[0]),
         tempMin: Math.round(daily.temperature_2m_min[0]),
         humidity: current.relative_humidity_2m,
@@ -159,6 +161,8 @@ export default function WeatherWidget() {
         city: cityName,
         temp: 22,
         condition: 'Partly Cloudy',
+        weatherCode: 2,
+        isDay: true,
         tempMax: 26,
         tempMin: 16,
         humidity: 62,
@@ -221,38 +225,40 @@ export default function WeatherWidget() {
         async (position) => {
           const latitude = position.coords.latitude;
           const longitude = position.coords.longitude;
-          
-          try {
-            // Reverse geocode or just set local coords and call weather
-            const response = await fetch(
-              `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`
-            );
-            let detectedCity = 'Current Location';
-            if (response.ok) {
-              const resData = await response.json();
-              detectedCity = resData.address.city || resData.address.town || resData.address.suburb || 'Local Area';
+                    try {
+              // Reverse geocode using CORS-enabled client endpoint with graceful fallback
+              const response = await fetch(
+                `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
+              );
+              let detectedCity = 'Current Location';
+              if (response.ok) {
+                const resData = await response.json();
+                detectedCity = resData.city || resData.locality || resData.principalSubdivision || 'Local Area';
+              }
+              setCity(detectedCity);
+              setLat(latitude);
+              setLon(longitude);
+            } catch {
+              setCity('Local Weather');
+              setLat(latitude);
+              setLon(longitude);
             }
-            setCity(detectedCity);
-            setLat(latitude);
-            setLon(longitude);
-          } catch {
-            setCity('Local Weather');
-            setLat(latitude);
-            setLon(longitude);
+          },
+          () => {
+            setError('Location permission denied or unavailable.');
+            setLoading(false);
           }
-        },
-        () => {
-          setError('Location permission denied or unavailable.');
-          setLoading(false);
-        }
-      );
-    } else {
-      setError('Geolocation is not supported by your browser.');
-    }
-  };
+        );
+      } else {
+        setError('Geolocation is not supported by your browser.');
+      }
+    };
 
-  // Get active weather icon
-  const WeatherIconComp = weather ? (getWeatherCondition(weather.tempMax > 28 ? 0 : 2, true).icon) : Sun;
+  // Get active weather condition details (icon and color) based on true weather code
+  const activeCondition = weather 
+    ? getWeatherCondition(weather.weatherCode ?? 0, weather.isDay ?? true)
+    : { icon: Sun, color: 'text-amber-500 dark:text-amber-400', text: 'Clear Sky' };
+  const WeatherIconComp = activeCondition.icon;
 
   return (
     <div className="bg-white dark:bg-elegant-card rounded-3xl p-6 border border-neutral-200 dark:border-elegant-border hover:dark:border-elegant-border-hover transition-all duration-300 shadow-sm flex flex-col justify-between h-full" id="weather-widget">
@@ -330,7 +336,7 @@ export default function WeatherWidget() {
         <div className="flex items-center justify-between py-2" id="weather-info-body">
           <div className="flex items-center gap-3">
             <div className="p-3 bg-neutral-100 dark:bg-elegant-card-darker rounded-2xl border border-neutral-200/40 dark:border-elegant-border">
-              <WeatherIconComp className="w-10 h-10 text-amber-500 dark:text-amber-400" />
+              <WeatherIconComp className={`w-10 h-10 ${activeCondition.color}`} />
             </div>
             <div>
               <div className="flex items-baseline">

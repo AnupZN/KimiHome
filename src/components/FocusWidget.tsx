@@ -46,20 +46,30 @@ export default function FocusWidget() {
   const [tempLong, setTempLong] = useState(customDurations.longBreak);
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
 
-  // Update temp state when sliders open
-  useEffect(() => {
-    if (showSettings) {
-      setTempWork(customDurations.work);
-      setTempShort(customDurations.shortBreak);
-      setTempLong(customDurations.longBreak);
+  const initAudioContext = () => {
+    try {
+      if (!audioCtxRef.current) {
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioContextClass) {
+          audioCtxRef.current = new AudioContextClass();
+        }
+      }
+      if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
+        audioCtxRef.current.resume();
+      }
+    } catch (e) {
+      console.warn('AudioContext initialization failed', e);
     }
-  }, [showSettings, customDurations]);
+  };
 
   // Synthesize beep notification
   const playBeep = () => {
     try {
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      initAudioContext();
+      const audioCtx = audioCtxRef.current;
+      if (!audioCtx) return;
       
       // Tone 1
       const osc1 = audioCtx.createOscillator();
@@ -73,18 +83,20 @@ export default function FocusWidget() {
       osc1.start(audioCtx.currentTime);
       osc1.stop(audioCtx.currentTime + 0.4);
 
-      // Tone 2 (staggered slightly for a nice chime)
+      // Tone 2 (staggered slightly for a pleasant chime)
       setTimeout(() => {
-        const osc2 = audioCtx.createOscillator();
-        const gain2 = audioCtx.createGain();
+        if (!audioCtxRef.current) return;
+        const ctx = audioCtxRef.current;
+        const osc2 = ctx.createOscillator();
+        const gain2 = ctx.createGain();
         osc2.connect(gain2);
-        gain2.connect(audioCtx.destination);
-        osc2.frequency.setValueAtTime(659.25, audioCtx.currentTime); // E5
-        gain2.gain.setValueAtTime(0, audioCtx.currentTime);
-        gain2.gain.linearRampToValueAtTime(0.3, audioCtx.currentTime + 0.05);
-        gain2.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.5);
-        osc2.start(audioCtx.currentTime);
-        osc2.stop(audioCtx.currentTime + 0.5);
+        gain2.connect(ctx.destination);
+        osc2.frequency.setValueAtTime(659.25, ctx.currentTime); // E5
+        gain2.gain.setValueAtTime(0, ctx.currentTime);
+        gain2.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.05);
+        gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+        osc2.start(ctx.currentTime);
+        osc2.stop(ctx.currentTime + 0.5);
       }, 150);
 
     } catch (e) {
@@ -119,6 +131,9 @@ export default function FocusWidget() {
   }, [isActive, timeLeft, mode, customDurations, sessionsCompleted]);
 
   const toggleTimer = () => {
+    if (!isActive) {
+      initAudioContext();
+    }
     setIsActive(!isActive);
   };
 

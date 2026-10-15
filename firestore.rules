@@ -9,11 +9,14 @@ service cloud.firestore {
 
     match /sync_profiles/{profileId} {
       // Validate the document ID (sync code) format to prevent resource poisoning
-      allow read: if isValidId(profileId) && (
+      allow get: if isValidId(profileId) && (
         !resource.data.keys().hasAll(['ownerId']) || 
         resource.data.ownerId == null || 
         (request.auth != null && resource.data.ownerId == request.auth.uid)
       );
+      
+      // Explicitly disallow collection listing / enumeration
+      allow list: if false;
       
       allow create: if isValidId(profileId) 
         && isValidSyncProfile(request.resource.data)
@@ -27,13 +30,13 @@ service cloud.firestore {
         && isValidSyncProfile(request.resource.data)
         && (
           // Case 1: Existing profile was anonymous
-          (!resource.data.keys().hasAll(['ownerId']) || resource.data.ownerId == null) &&
-          (!request.resource.data.keys().hasAll(['ownerId']) || request.resource.data.ownerId == null || (request.auth != null && request.resource.data.ownerId == request.auth.uid))
-        ) || (
+          ((!resource.data.keys().hasAll(['ownerId']) || resource.data.ownerId == null) &&
+           (!request.resource.data.keys().hasAll(['ownerId']) || request.resource.data.ownerId == null || (request.auth != null && request.resource.data.ownerId == request.auth.uid)))
+          ||
           // Case 2: Existing profile is owned by a user
-          resource.data.keys().hasAll(['ownerId']) && resource.data.ownerId != null &&
-          request.auth != null && resource.data.ownerId == request.auth.uid &&
-          request.resource.data.keys().hasAll(['ownerId']) && request.resource.data.ownerId == resource.data.ownerId
+          (resource.data.keys().hasAll(['ownerId']) && resource.data.ownerId != null &&
+           request.auth != null && resource.data.ownerId == request.auth.uid &&
+           request.resource.data.keys().hasAll(['ownerId']) && request.resource.data.ownerId == resource.data.ownerId)
         );
         
       allow delete: if false; // Deletion is not exposed in the app

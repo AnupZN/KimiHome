@@ -125,7 +125,14 @@ export default function SearchBar({
     if (matchedShortcut) {
       isShortcut = true;
       const cleanQuery = trimmed.slice(matchedShortcut.shortcut.length).trim();
-      if (matchedShortcut.url.includes('{query}')) {
+      if (!cleanQuery) {
+        // If shortcut is submitted without a query, open the provider's homepage
+        try {
+          targetUrl = new URL(matchedShortcut.url).origin;
+        } catch {
+          targetUrl = matchedShortcut.url.replace('{query}', '');
+        }
+      } else if (matchedShortcut.url.includes('{query}')) {
         targetUrl = matchedShortcut.url.replace('{query}', encodeURIComponent(cleanQuery));
       } else {
         targetUrl = matchedShortcut.url + encodeURIComponent(cleanQuery);
@@ -133,23 +140,36 @@ export default function SearchBar({
     }
 
     if (!isShortcut) {
-      // Check if query is a URL
-      const isUrl = /^(https?:\/\/)?([\da-z.-]+)\.([a-z.]{2,6})([/\w .-]*)*\/?$/.test(trimmed);
+      // Safe URL check without ReDoS-prone regular expressions
+      let isUrl = false;
+      const candidate = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+      try {
+        const parsed = new URL(candidate);
+        isUrl = parsed.hostname.includes('.') && 
+                !parsed.hostname.startsWith('.') && 
+                !parsed.hostname.endsWith('.') &&
+                !/\s/.test(parsed.hostname);
+      } catch {
+        isUrl = false;
+      }
+
       if (isUrl) {
-        targetUrl = trimmed;
-        if (!/^https?:\/\//i.test(targetUrl)) {
-          targetUrl = 'https://' + targetUrl;
-        }
+        targetUrl = candidate;
       } else {
         targetUrl = ENGINES[currentEngine].url + encodeURIComponent(trimmed);
       }
+    }
+
+    // Ensure targetUrl uses a safe http/https protocol
+    if (!/^https?:\/\//i.test(targetUrl)) {
+      targetUrl = ENGINES[currentEngine].url + encodeURIComponent(trimmed);
     }
 
     // Open targetUrl based on linkTarget
     if (linkTarget === 'self') {
       window.location.href = targetUrl;
     } else {
-      window.open(targetUrl, '_blank');
+      window.open(targetUrl, '_blank', 'noopener,noreferrer');
     }
   };
 

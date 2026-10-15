@@ -26,6 +26,8 @@ export interface WeatherData {
   city: string;
   temp: number;
   condition: string;
+  weatherCode?: number;
+  isDay?: boolean;
   tempMin: number;
   tempMax: number;
   humidity: number;
