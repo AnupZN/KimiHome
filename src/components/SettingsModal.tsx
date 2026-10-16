@@ -554,7 +554,7 @@ export default function SettingsModal({
             <div className="grid grid-cols-2 gap-3" id="settings-header-elements">
               {['clock', 'search'].map((key) => {
                 const isEnabled = settings.enabledWidgets[key as keyof UserSettings['enabledWidgets']];
-                const label = key === 'clock' ? 'Greeting Clock' : 'Search Bar';
+                const label = key === 'clock' ? 'Clock Display' : 'Search Bar';
                 const Icon = key === 'clock' ? Clock : Search;
                 return (
                   <button

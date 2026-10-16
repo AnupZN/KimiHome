@@ -401,10 +401,7 @@ export default function App() {
         {/* HERO SECTION: Time, Greeting, and Search */}
         <section className="space-y-6 text-center" id="hero-section">
           {settings.enabledWidgets.clock && (
-            <ClockWidget 
-              userName={settings.userName} 
-              onNameChange={(name) => setSettings({ ...settings, userName: name })}
-            />
+            <ClockWidget />
           )}
 
           {settings.enabledWidgets.search && (
