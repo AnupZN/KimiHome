@@ -17,12 +17,12 @@ const SettingsModal = lazy(() => import('./components/SettingsModal'));
 
 // Default values
 const DEFAULT_BOOKMARKS: Bookmark[] = [
-  { id: '1', title: 'Google', url: 'https://google.com', category: 'Favorites', color: 'blue', icon: 'globe' },
-  { id: '2', title: 'YouTube', url: 'https://youtube.com', category: 'Favorites', color: 'rose', icon: 'youtube' },
-  { id: '3', title: 'GitHub', url: 'https://github.com', category: 'Favorites', color: 'neutral', icon: 'github' },
-  { id: '4', title: 'Reddit', url: 'https://reddit.com', category: 'Social', color: 'amber', icon: 'chat' },
-  { id: '5', title: 'Gmail', url: 'https://mail.google.com', category: 'Favorites', color: 'rose', icon: 'mail' },
-  { id: '6', title: 'Devdocs', url: 'https://devdocs.io', category: 'Work', color: 'emerald', icon: 'code' },
+  { id: '1', title: 'FMHY', url: 'https://fmhy.net', category: 'Favorites', color: 'purple', icon: 'globe' },
+  { id: '2', title: 'TorBox', url: 'https://torbox.app', category: 'Favorites', color: 'blue', icon: 'globe' },
+  { id: '3', title: 'BentoPDF', url: 'https://bentopdf.com', category: 'Favorites', color: 'emerald', icon: 'book' },
+  { id: '4', title: 'ImgBB', url: 'https://imgbb.com', category: 'Favorites', color: 'amber', icon: 'globe' },
+  { id: '5', title: 'Catbox', url: 'https://catbox.moe', category: 'Favorites', color: 'rose', icon: 'globe' },
+  { id: '6', title: 'GitHub', url: 'https://github.com', category: 'Favorites', color: 'neutral', icon: 'github' },
 ];
 
 const DEFAULT_TODOS: TodoItem[] = [
@@ -76,7 +76,19 @@ export default function App() {
 
   const [bookmarks, setBookmarks] = useState<Bookmark[]>(() => {
     const saved = localStorage.getItem('bookmarksList');
-    return saved ? JSON.parse(saved) : DEFAULT_BOOKMARKS;
+    if (!saved) return DEFAULT_BOOKMARKS;
+    try {
+      const parsed = JSON.parse(saved);
+      // Auto-migrate from the legacy demo template bookmarks to the new defaults
+      const legacyUrls = ['https://google.com', 'https://youtube.com', 'https://mail.google.com', 'https://devdocs.io'];
+      const isLegacy = Array.isArray(parsed) && parsed.length === 6 && parsed.some((b: Bookmark) => legacyUrls.includes(b.url)) && !parsed.some((b: Bookmark) => b.url.includes('fmhy.net'));
+      if (isLegacy) {
+        return DEFAULT_BOOKMARKS;
+      }
+      return parsed;
+    } catch {
+      return DEFAULT_BOOKMARKS;
+    }
   });
 
   const [todos, setTodos] = useState<TodoItem[]>(() => {
